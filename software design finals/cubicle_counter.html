@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Cubicle Usage Counter</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap');
+  body {
+    font-family: 'Montserrat', sans-serif;
+    background: linear-gradient(135deg, #74ebd5 0%, #ACB6E5 100%);
+    margin: 0;
+    padding: 2rem;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+  }
+  h1 {
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+    color: #222;
+    text-shadow: 1px 1px 4px rgba(0,0,0,0.1);
+  }
+  .counter-container {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-bottom: 2rem;
+    flex-wrap: wrap;
+  }
+  .counter {
+    background: #fff;
+    border-radius: 12px;
+    padding: 1rem 1.5rem;
+    box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    text-align: center;
+    min-width: 120px;
+    user-select: none;
+  }
+  .counter h2 {
+    margin: 0 0 0.25rem 0;
+    font-weight: 600;
+    font-size: 1.2rem;
+  }
+  .counter p {
+    font-size: 2rem;
+    font-weight: 700;
+    margin: 0;
+  }
+  .state-available {
+    color: #2ecc71;
+  }
+  .state-used {
+    color: #e74c3c;
+  }
+  .total {
+    background: #243B55;
+    color: #fff;
+    border-radius: 12px;
+    padding: 1rem 2rem;
+    font-weight: 700;
+    font-size: 1.6rem;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    user-select: none;
+    margin-bottom: 1.5rem;
+  }
+  .cubicles {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
+    gap: 1.25rem;
+    width: 100%;
+    max-width: 700px;
+  }
+  .cubicle {
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 3px 8px rgba(0,0,0,0.12);
+    padding: 1rem;
+    text-align: center;
+    user-select: none;
+    transition: background-color 0.3s ease, color 0.3s ease;
+    cursor: default;
+    position: relative;
+  }
+  .cubicle-number {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 0.3rem;
+  }
+  .status-label {
+    font-weight: 600;
+    font-size: 1rem;
+  }
+  .available {
+    background-color: #d4f7dc;
+    color: #27ae60;
+  }
+  .used {
+    background-color: #f7d4d4;
+    color: #c0392b;
+  }
+  .timer-label {
+    margin-top: 4px;
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #555;
+  }
+  footer {
+    margin-top: 3rem;
+    font-size: 0.9rem;
+    color: #555;
+    user-select: none;
+  }
+  .link-container {
+    margin-top: 1.5rem;
+  }
+  .link-container a {
+    font-weight: 600;
+    color: #243B55;
+    text-decoration: none;
+    background: #a0c4ff;
+    padding: 0.5rem 1rem;
+    border-radius: 8px;
+    box-shadow: 0 2px 8px -2px rgba(36,59,85,0.6);
+    transition: background-color 0.3s ease;
+  }
+  .link-container a:hover {
+    background: #70a1ff;
+    color: white;
+  }
+</style>
+</head>
+<body>
+  <h1>Cubicle Usage Counter</h1>
+  <div class="counter-container">
+    <div class="counter">
+      <h2>Available</h2>
+      <p id="count-available" class="state-available">0</p>
+    </div>
+    <div class="counter">
+      <h2>Being Used</h2>
+      <p id="count-used" class="state-used">0</p>
+    </div>
+  </div>
+  <div class="total" aria-label="Total cubicles: 10">
+    Total Cubicles: 10
+  </div>
+  <div class="cubicles" id="cubicles-container" role="list" aria-label="List of cubicles"></div>
+
+  <div class="link-container">
+    <a href="cubicle_management.html" target="_blank" rel="noopener noreferrer">Go to Cubicle Management Page</a>
+  </div>
+
+  <footer>
+    * Real-time cubicle usage and time left displayed.
+  </footer>
+
+<script>
+  const cubiclesContainer = document.getElementById('cubicles-container');
+  const countAvailableEl = document.getElementById('count-available');
+  const countUsedEl = document.getElementById('count-used');
+  const TOTAL_CUBICLES = 10;
+  const LOCAL_STORAGE_KEY = 'cubicles_data';
+
+  function loadCubiclesData() {
+    const dataJSON = localStorage.getItem(LOCAL_STORAGE_KEY);
+    if (dataJSON) {
+      try {
+        const data = JSON.parse(dataJSON);
+        if (data && data.cubicles && Array.isArray(data.cubicles) && data.cubicles.length === TOTAL_CUBICLES) {
+          return data.cubicles;
+        }
+      } catch {}
+    }
+    // Initialize cubicles as all available with null user and null expires
+    return Array(TOTAL_CUBICLES).fill(null).map(() => ({status:'available', user:null, expires:null}));
+  }
+
+  function saveCubiclesData(cubicles) {
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify({cubicles}));
+  }
+
+  // Format seconds left to mm:ss
+  function formatSeconds(seconds) {
+    const m = Math.floor(seconds/60);
+    const s = seconds % 60;
+    return m + ':' + (s < 10 ? '0' : '') + s;
+  }
+
+  // Create cubicle element
+  function createCubicleElement(index, cubicle) {
+    const div = document.createElement('div');
+    div.className = 'cubicle ' + cubicle.status;
+    div.setAttribute('role', 'listitem');
+    div.setAttribute('aria-label', `Cubicle ${index+1}, status: ${cubicle.status}`);
+    div.dataset.index = index;
+
+    const numberEl = document.createElement('div');
+    numberEl.className = 'cubicle-number';
+    numberEl.textContent = index + 1;
+
+    const statusEl = document.createElement('div');
+    statusEl.className = 'status-label';
+    statusEl.textContent = cubicle.status.charAt(0).toUpperCase() + cubicle.status.slice(1);
+
+    const timerEl = document.createElement('div');
+    timerEl.className = 'timer-label';
+    if (cubicle.status === 'used' && cubicle.expires) {
+      const secondsLeft = Math.floor((cubicle.expires - Date.now()) / 1000);
+      timerEl.textContent = secondsLeft > 0 ? `Time left: ${formatSeconds(secondsLeft)}` : 'Time left: 0:00';
+    } else {
+      timerEl.textContent = '';
+    }
+
+    div.appendChild(numberEl);
+    div.appendChild(statusEl);
+    div.appendChild(timerEl);
+
+    return div;
+  }
+
+  // Render all cubicles
+  function renderCubicles() {
+    const cubicles = loadCubiclesData();
+    cubiclesContainer.innerHTML = '';
+    cubicles.forEach((c, i) => {
+      cubiclesContainer.appendChild(createCubicleElement(i, c));
+    });
+    updateCounters(cubicles);
+  }
+
+  // Update available/used counters
+  function updateCounters(cubicles) {
+    let availableCount = 0;
+    let usedCount = 0;
+    cubicles.forEach(c => {
+      if (c.status === 'available') availableCount++;
+      else if (c.status === 'used') usedCount++;
+    });
+    countAvailableEl.textContent = availableCount;
+    countUsedEl.textContent = usedCount;
+  }
+
+  // Clean up expired cubicles (used where expires passed)
+  function cleanupExpiredCubicles() {
+    let hasChanges = false;
+    const cubicles = loadCubiclesData();
+    const now = Date.now();
+    for(let i=0; i<cubicles.length; i++) {
+      if(cubicles[i].status === 'used' && cubicles[i].expires && cubicles[i].expires <= now) {
+        cubicles[i].status = 'available';
+        cubicles[i].user = null;
+        cubicles[i].expires = null;
+        hasChanges = true;
+      }
+    }
+    if (hasChanges) {
+      saveCubiclesData(cubicles);
+    }
+  }
+
+  // Update UI regularly
+  function realtimeUpdate() {
+    cleanupExpiredCubicles();
+    renderCubicles();
+  }
+
+  // Listen for localStorage changes to sync between tabs
+  window.addEventListener('storage', (e) => {
+    if(e.key === LOCAL_STORAGE_KEY) {
+      renderCubicles();
+    }
+  });
+
+  // Initial render
+  renderCubicles();
+
+  // Update every second for real-time timers
+  setInterval(realtimeUpdate, 1000);
+</script>
+</body>
+</html>
